@@ -436,7 +436,7 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
         if level_boxes.is_cuda:
             ind = ind.cuda()
         feature_maps[i] = feature_maps[i].unsqueeze(0)  #CropAndResizeFunction needs batch dimension
-        pooled_features = CropAndResizeFunction(pool_size, pool_size, 0)(feature_maps[i], level_boxes, ind)
+        pooled_features = CropAndResizeFunction.apply(feature_maps[i], level_boxes, ind, pool_size, pool_size, 0)
         pooled.append(pooled_features)
 
     ## Pack pooled features into one tensor
@@ -495,7 +495,7 @@ def coordinates_roi(inputs, pool_size, image_shape):
     if boxes.is_cuda:
         ind = ind.cuda()
     cooridnates = cooridnates.unsqueeze(0)  ## CropAndResizeFunction needs batch dimension
-    pooled_features = CropAndResizeFunction(pool_size, pool_size, 0)(cooridnates, boxes, ind)
+    pooled_features = CropAndResizeFunction.apply(cooridnates, boxes, ind, pool_size, pool_size, 0)
 
     return pooled_features
 
@@ -570,7 +570,7 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, gt_param
     gt_boxes = gt_boxes.squeeze(0)
     gt_masks = gt_masks.squeeze(0)
     gt_parameters = gt_parameters.squeeze(0)
-    no_crowd_bool =  Variable(torch.ByteTensor(proposals.size()[0]*[True]), requires_grad=False)
+    no_crowd_bool =  Variable(torch.BoolTensor(proposals.size()[0]*[True]), requires_grad=False)
     if config.GPU_COUNT:
         no_crowd_bool = no_crowd_bool.cuda()
 
@@ -635,12 +635,12 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, gt_param
             box_ids = box_ids.cuda()
 
         if config.NUM_PARAMETER_CHANNELS > 0:
-            masks = Variable(CropAndResizeFunction(config.MASK_SHAPE[0], config.MASK_SHAPE[1], 0)(roi_masks[:, :, :, 0].contiguous().unsqueeze(1), boxes, box_ids).data, requires_grad=False).squeeze(1)
+            masks = Variable(CropAndResizeFunction.apply(roi_masks[:, :, :, 0].contiguous().unsqueeze(1), boxes, box_ids, config.MASK_SHAPE[0], config.MASK_SHAPE[1], 0).data, requires_grad=False).squeeze(1)
             masks = torch.round(masks)
-            parameters = Variable(CropAndResizeFunction(config.MASK_SHAPE[0], config.MASK_SHAPE[1], 0)(roi_masks[:, :, :, 1].contiguous().unsqueeze(1), boxes, box_ids).data, requires_grad=False).squeeze(1)
+            parameters = Variable(CropAndResizeFunction.apply(roi_masks[:, :, :, 1].contiguous().unsqueeze(1), boxes, box_ids, config.MASK_SHAPE[0], config.MASK_SHAPE[1], 0).data, requires_grad=False).squeeze(1)
             masks = torch.stack([masks, parameters], dim=-1)
         else:
-            masks = Variable(CropAndResizeFunction(config.MASK_SHAPE[0], config.MASK_SHAPE[1], 0)(roi_masks.unsqueeze(1), boxes, box_ids).data, requires_grad=False).squeeze(1)            
+            masks = Variable(CropAndResizeFunction.apply(roi_masks.unsqueeze(1), boxes, box_ids, config.MASK_SHAPE[0], config.MASK_SHAPE[1], 0).data, requires_grad=False).squeeze(1)
             masks = torch.round(masks)            
             pass
 
@@ -1914,7 +1914,7 @@ class MaskRCNN(nn.Module):
                     box_ids = Variable(torch.arange(roi_gt_masks.size()[0]), requires_grad=False).int()
                     if self.config.GPU_COUNT:
                         box_ids = box_ids.cuda()
-                    roi_gt_masks = Variable(CropAndResizeFunction(self.config.FINAL_MASK_SHAPE[0], self.config.FINAL_MASK_SHAPE[1], 0)(roi_gt_masks.unsqueeze(1), boxes, box_ids).data, requires_grad=False)
+                    roi_gt_masks = Variable(CropAndResizeFunction.apply(roi_gt_masks.unsqueeze(1), boxes, box_ids, self.config.FINAL_MASK_SHAPE[0], self.config.FINAL_MASK_SHAPE[1], 0).data, requires_grad=False)
                     roi_gt_masks = roi_gt_masks.squeeze(1)
 
                     roi_gt_masks = torch.round(roi_gt_masks)
